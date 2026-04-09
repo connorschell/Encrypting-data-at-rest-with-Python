@@ -74,17 +74,19 @@ HEADER_BASE_LEN = struct.calcsize(HEADER_FMT)   # 16 bytes
 
 
 def _pack_header(key_bits: int, key_mode: int, plaintext_size: int) -> bytes:
-    return struct.pack(HEADER_FMT, MAGIC, VERSION, key_bits, key_mode, 0, plaintext_size)
+    # Store key_bits//8 (16, 24, or 32) to fit in a single unsigned byte
+    return struct.pack(HEADER_FMT, MAGIC, VERSION, key_bits // 8, key_mode, 0, plaintext_size)
 
 
 def _unpack_header(data: bytes):
     if len(data) < HEADER_BASE_LEN:
         raise ValueError("File too short to contain a valid header.")
-    magic, version, key_bits, key_mode, _, plaintext_size = struct.unpack(HEADER_FMT, data[:HEADER_BASE_LEN])
+    magic, version, key_bytes, key_mode, _, plaintext_size = struct.unpack(HEADER_FMT, data[:HEADER_BASE_LEN])
     if magic != MAGIC:
         raise ValueError("File does not appear to be encrypted by this tool (bad magic bytes).")
     if version != VERSION:
         raise ValueError(f"Unsupported file version: {version}.")
+    key_bits = key_bytes * 8  # convert back to bits
     return key_bits, key_mode, plaintext_size
 
 # ── Core encrypt / decrypt ────────────────────────────────────────────────────
