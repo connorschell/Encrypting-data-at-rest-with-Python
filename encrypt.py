@@ -244,19 +244,34 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Encrypt a file with a password:
+  # Encrypt a single file with a password:
   python encrypt.py encrypt report.pdf --key-mode password
 
-  # Encrypt a folder, generate a 256-bit key automatically:
+  # Encrypt a file and delete the original after:
+  python encrypt.py encrypt report.pdf --key-mode password --delete-original
+
+  # Encrypt a folder (each file encrypted individually):
+  python encrypt.py encrypt ./docs --key-mode password
+
+  # Encrypt a folder as a single zip archive:
+  python encrypt.py encrypt ./docs --key-mode password --zip
+
+  # Encrypt a folder as a zip and delete the original folder:
+  python encrypt.py encrypt ./docs --key-mode password --zip --delete-original
+
+  # Encrypt with a generated 256-bit raw key (key printed to terminal):
   python encrypt.py encrypt ./docs --bits 256 --key-mode raw --key-source generate
 
-  # Encrypt multiple targets with a user-supplied hex key:
-  python encrypt.py encrypt a.txt b.txt ./folder --bits 192 --key-mode raw --hex-key <hex>
+  # Encrypt with a user-supplied hex key:
+  python encrypt.py encrypt a.txt b.txt --bits 192 --key-mode raw --key-source provide --hex-key <hex>
 
   # Decrypt a single file with a password:
   python encrypt.py decrypt report.pdf.enc --key-mode password
 
-  # Decrypt all .enc files in a folder with a raw key:
+  # Decrypt a zipped folder archive:
+  python encrypt.py decrypt docs.zip.enc --key-mode password
+
+  # Decrypt a folder of .enc files with a raw key:
   python encrypt.py decrypt ./docs --key-mode raw --hex-key <hex>
 """,
     )
