@@ -321,7 +321,11 @@ def cmd_decrypt(args) -> None:
             key_bits, _, _ = _unpack_header(data)
             file_raw_key = key_from_hex(args.hex_key, key_bits)
 
-        decrypt_file(src, dst, password, file_raw_key)
+        try:
+            decrypt_file(src, dst, password, file_raw_key)
+        except ValueError as e:
+            print(f"  ERROR: {e}")
+            continue
     print("\n  Done.")
 
 
