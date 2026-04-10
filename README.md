@@ -51,6 +51,7 @@ python encrypt.py <command> <targets> [options]
 | `--key-source` | `generate`, `provide` | `generate` | For `--key-mode raw` only |
 | `--hex-key` | hex string | — | Key in hex (with `--key-source provide`) |
 | `--out-dir` | path | alongside original | Output directory |
+| `--delete-original` | — | off | Delete original file(s) after successful encryption |
 
 ### Options – `decrypt`
 
@@ -113,6 +114,14 @@ python encrypt.py encrypt data.csv --bits 128 --key-mode raw --key-source provid
 ```bash
 python encrypt.py encrypt ./docs --key-mode password --out-dir ./encrypted_output
 ```
+
+---
+
+### Encrypt and delete the original file after encryption
+```bash
+python encrypt.py encrypt report.pdf --key-mode password --delete-original
+```
+The original `report.pdf` will be permanently deleted after encryption. Use with caution.
 
 ---
 

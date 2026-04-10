@@ -255,6 +255,8 @@ Examples:
                      help="Hex-encoded AES key (used with --key-mode raw --key-source provide)")
     enc.add_argument("--out-dir",
                      help="Directory for encrypted output files (default: alongside originals)")
+    enc.add_argument("--delete-original", action="store_true",
+                     help="Delete the original file(s) after successful encryption")
 
     # ── decrypt sub-command
     dec = sub.add_parser("decrypt", help="Decrypt files/folders")
@@ -281,6 +283,9 @@ def cmd_encrypt(args) -> None:
     for src in files:
         dst = enc_output_path(src, out_dir)
         encrypt_file(src, dst, key, args.bits, salt, key_mode)
+        if args.delete_original:
+            src.unlink()
+            print(f"  Deleted original: {src}")
     print("\n  Done.")
 
 
