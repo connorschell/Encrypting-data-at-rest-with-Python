@@ -11,6 +11,8 @@ import getpass
 import struct
 import hashlib
 import secrets
+import zipfile
+import tempfile
 from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -215,6 +217,24 @@ def setup_encrypt_key(args) -> tuple[bytes, bytes | None, int]:
         key = key_from_hex(hex_str, key_bits)
     return key, None, 0
 
+# ── Zip helpers ───────────────────────────────────────────────────────────────
+
+def zip_folder(folder: Path) -> Path:
+    """Zip an entire folder into a temp .zip file. Returns the zip path."""
+    tmp = Path(tempfile.mktemp(suffix=".zip"))
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in sorted(folder.rglob("*")):
+            if f.is_file():
+                zf.write(f, f.relative_to(folder.parent))
+    return tmp
+
+
+def unzip_to(zip_path: Path, dest_dir: Path) -> None:
+    """Unzip a zip file into dest_dir."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(dest_dir)
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -257,6 +277,8 @@ Examples:
                      help="Directory for encrypted output files (default: alongside originals)")
     enc.add_argument("--delete-original", action="store_true",
                      help="Delete the original file(s) after successful encryption")
+    enc.add_argument("--zip", action="store_true",
+                     help="Zip each folder into a single archive before encrypting")
 
     # ── decrypt sub-command
     dec = sub.add_parser("decrypt", help="Decrypt files/folders")
@@ -272,12 +294,41 @@ Examples:
 
 
 def cmd_encrypt(args) -> None:
+    out_dir = Path(args.out_dir) if args.out_dir else None
+    key, salt, key_mode = setup_encrypt_key(args)
+
+    # ── zip mode: each directory becomes a single .zip.enc
+    if args.zip:
+        targets = [Path(t) for t in args.targets]
+        for target in targets:
+            if target.is_dir():
+                print(f"\n  Zipping folder: {target} …")
+                tmp_zip = zip_folder(target)
+                dst = (out_dir / (target.name + ".zip.enc")) if out_dir else \
+                      target.parent / (target.name + ".zip.enc")
+                if out_dir:
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                encrypt_file(tmp_zip, dst, key, args.bits, salt, key_mode)
+                tmp_zip.unlink()
+                if args.delete_original:
+                    import shutil
+                    shutil.rmtree(target)
+                    print(f"  Deleted original folder: {target}")
+            elif target.is_file():
+                dst = enc_output_path(target, out_dir)
+                encrypt_file(target, dst, key, args.bits, salt, key_mode)
+                if args.delete_original:
+                    target.unlink()
+                    print(f"  Deleted original: {target}")
+            else:
+                print(f"  Warning: '{target}' not found, skipping.", file=sys.stderr)
+        print("\n  Done.")
+        return
+
+    # ── normal mode: encrypt individual files
     files = collect_files(args.targets)
     if not files:
         sys.exit("  No files found to encrypt.")
-
-    out_dir = Path(args.out_dir) if args.out_dir else None
-    key, salt, key_mode = setup_encrypt_key(args)
 
     print(f"\n  Encrypting {len(files)} file(s) with AES-{args.bits}-CBC …\n")
     for src in files:
@@ -311,21 +362,37 @@ def cmd_decrypt(args) -> None:
         if src.suffix != ".enc":
             print(f"  Skipping {src} (not a .enc file)")
             continue
-        dst = dec_output_path(src, out_dir)
 
         # For raw-key mode, resolve key per file so we get correct key_bits.
         file_raw_key = raw_key
         if args.key_mode == "raw" and args.hex_key:
-            # Read header to get key_bits for this file
             data = src.read_bytes()
             key_bits, _, _ = _unpack_header(data)
             file_raw_key = key_from_hex(args.hex_key, key_bits)
 
-        try:
-            decrypt_file(src, dst, password, file_raw_key)
-        except ValueError as e:
-            print(f"  ERROR: {e}")
-            continue
+        # Check if this is a zipped folder (.zip.enc)
+        is_zip = src.stem.endswith(".zip")
+
+        if is_zip:
+            tmp_zip = Path(tempfile.mktemp(suffix=".zip"))
+            try:
+                decrypt_file(src, tmp_zip, password, file_raw_key)
+                dest_dir = (out_dir if out_dir else src.parent)
+                unzip_to(tmp_zip, dest_dir)
+                folder_name = src.name.replace(".zip.enc", "")
+                print(f"  Unzipped folder: {dest_dir / folder_name}")
+            except ValueError as e:
+                print(f"  ERROR: {e}")
+            finally:
+                if tmp_zip.exists():
+                    tmp_zip.unlink()
+        else:
+            dst = dec_output_path(src, out_dir)
+            try:
+                decrypt_file(src, dst, password, file_raw_key)
+            except ValueError as e:
+                print(f"  ERROR: {e}")
+                continue
     print("\n  Done.")
 
 
